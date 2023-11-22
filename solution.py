@@ -9,6 +9,7 @@ class Node:
     more_tree = None
     less_tree = None
     chosen_label = None
+    isLeaf = False
 
 
 def zero_one_in_labels(labels:list) -> (int, int):
@@ -27,22 +28,25 @@ def get_entropy(n_cat1: int, n_cat2: int) -> float:
     return entropy
 
 ###################### 2. feladat, optimális szeparáció #######################
-def get_best_separation(features: list, labels: list) -> (int, int):
-    zerosones = zero_one_in_labels(labels)
-    H_L = get_entropy(zerosones[0], zerosones[1])
-    L = len(labels)
+def get_best_separation(featuresL: list, labelsL: list) -> (int, int):
+    #zerosones = zero_one_in_labels(labels)
+    
     lh_felosztas = 0
     lh_tul_index = 0
     lh_tul_hatar = 0
     
-    np_features : np.ndarray = features
-    no_feature_rows = len(features)-1#np_features.shape[0]
-    no_feature_cols = 8#np_features.shape[1]
-
+    features = np.array(featuresL)
+    labels = np.array(labelsL)
+    
+    ''' 
+    no_feature_rows = features.shape[0]
+    no_feature_cols = features.shape[1]
+    H_L = get_entropy(np.count_nonzero(labels == 0), np.count_nonzero(labels == 1))
+    L = len(labels)
 
     for i in range(no_feature_rows):
         for j in range(no_feature_cols):
-            for k in range(np_features[i][j]):
+            for k in range(features[i][j]):
                 e = 0
                 e_cat1 = 0
                 e_cat2 = 0
@@ -50,7 +54,7 @@ def get_best_separation(features: list, labels: list) -> (int, int):
                 f_cat1 = 0
                 f_cat2 = 0
                 for l in range(no_feature_rows):
-                    if np_features[l][j] <= k:
+                    if features[l][j] <= k:
                         e +=1
                         if labels[l] == 1:
                             e_cat1 += 1
@@ -67,28 +71,52 @@ def get_best_separation(features: list, labels: list) -> (int, int):
                     lh_felosztas = curr_informacinyereseg
                     lh_tul_index = j
                     lh_tul_hatar = k
-                
-                        
-                
-        
+    '''
+    for column in range(features.shape[1]):
+        for val in features[:,column]:
+            #getting the entropy of the overall data
+            H = get_entropy(np.count_nonzero(labels == 0), np.count_nonzero(labels == 1))
+            #getting the number of elements in the overall data
+            nH = len(labels)
 
-    #TODO számítsa ki a legjobb szeparáció tulajdonságát és értékét!
+            #getting the entropy of the left side of the separation
+            He = get_entropy(np.sum(labels[features[:,column] <= val] == 0), np.sum(labels[features[:,column] <= val] == 1))
+            #getting the number of elements lesser than the val
+            nHe = np.sum(features[:,column] <= val)
+
+
+            #getting the entropy of the right side of the separation
+            Hf = get_entropy(np.sum(labels[features[:,column] > val] == 0), np.sum(labels[features[:,column] > val] == 1))
+            #getting the number of elements greater than the val
+            nHf = np.sum(features[:,column] > val)
+
+            #getting the entropy of the separation
+            curr_informacinyereseg = H - (nHe/nH *He + nHf/nH * Hf)
+            #if the entropy of the separation is lower than the previous one, we save the column and the value of the separation
+            if curr_informacinyereseg > lh_felosztas:
+                lh_felosztas = curr_informacinyereseg
+                lh_tul_index = column
+                lh_tul_hatar = val                    
+         
     return lh_tul_index, lh_tul_hatar
 
 ################### 3. feladat, döntési fa implementációja ####################
 def treebuilder(features:list, labels:list, tree:Node):
-    zerosones = zero_one_in_labels(labels)
 
-    base_entrophy = get_entropy(zerosones[0], zerosones[1])
-    if base_entrophy == 0:
+    
+    if get_entropy(labels.count(0), labels.count(1)) == 0:
         #leaf
-        if zerosones[0] > zerosones[1]:
+        if labels.count(0) > labels.count(1):
             tree.chosen_label = 0
+            tree.isLeaf = True
+            return
         else:
             tree.chosen_label = 1
+            tree.isLeaf = True
+            return
     else:
         #Not a leaf
-        tree.separation_idx, tree.separation_value = separation_idx = get_best_separation(features, labels)
+        (tree.separation_idx, tree.separation_value) = get_best_separation(features, labels)
         
         top_features_list = []
         top_labels_list = []
@@ -96,15 +124,16 @@ def treebuilder(features:list, labels:list, tree:Node):
         bottom_labels_list = []
         
         for i in range(len(features)):
-            if features[i][tree.separation_idx] <= tree.separation_idx:
+            if features[i][tree.separation_idx] <= tree.separation_value:
                 bottom_features_list.append(features[i])
                 bottom_labels_list.append(labels[i])
             else:
                 top_features_list.append(features[i])
                 top_labels_list.append(labels[i])
-
+    
         tree.less_tree = Node()
         tree.more_tree = Node()
+        
         treebuilder(bottom_features_list, bottom_labels_list, tree.less_tree)
         treebuilder(top_features_list, top_labels_list, tree.more_tree)
 
@@ -114,7 +143,7 @@ def decide(features_row, tree):
     if tree.less_tree == None and tree.more_tree == None:
         return tree.chosen_label
     else:
-        if features_row[tree.separation[0] ] <= features_row[tree.separation[1]]:
+        if  int(features_row[tree.separation_idx ]) <= int(tree.separation_value):
             return decide(features_row, tree.less_tree)
         else:
             return decide(features_row, tree.more_tree)
@@ -123,7 +152,7 @@ def decide(features_row, tree):
 def printTree(node:Node, level=0):
     if node != None:
         printTree(node.more_tree, level + 1)
-        print(' ' * 4 * level + '-> ' + str(node.separation) + str(node.chosen_label))
+        print(' ' * 4 * level + '-> ' + 'id: ' + str(node.separation_idx) + ' value: ' + str(node.separation_value) + ' label: ' + str(node.chosen_label))
         printTree(node.less_tree, level + 1)
 
 
@@ -140,6 +169,15 @@ def main():
            
     #Define and build the decision tree, based on train data
     tree = Node()
+    
+    #z_o =zero_one_in_labels(train_values)
+    #print("Test data labels: ")
+    #print(z_o)
+    #print(train_values.count(0))
+    
+    #print(get_best_separation(train_features, train_values))
+    
+    
     treebuilder(train_features, train_values, tree)
     #print("The Tree is: ")
     #printTree(tree)
